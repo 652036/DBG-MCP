@@ -1,4 +1,6 @@
-# dbgmcp
+﻿# dbgmcp
+
+[English](README.md) | [简体中文](README.zh-CN.md)
 
 `dbgmcp` is a thin local wrapper around the official `x64dbg_automate` MCP server.
 
@@ -113,7 +115,7 @@ python -m dbgmcp smoke-test --target $env:DBGMCP_SMOKE_TARGET
 
 On this machine, the wrapper tries the following common debugger paths first:
 
-- `C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG64\醉梦DBG.exe`
+- executables under `C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG64\`
 - standard `x64dbg.exe`, `x32dbg.exe`, and `x96dbg.exe` paths
 
 If your debugger executable is elsewhere, set:
@@ -139,4 +141,4 @@ This wrapper cannot auto-complete these external steps on its own:
 
 Without those, the MCP process can start, but tools like `start_session` or `connect_to_session` will not become useful.
 
-On this workstation, empty sessions work with the bundled `醉梦DBG.exe`, but loading a target executable may depend on that custom build's behavior. If target launch stalls, point `X64DBG_PATH` at a stock x64dbg build instead.
+On this workstation, empty sessions work with the bundled custom debugger build under `DBG64`, but loading a target executable may depend on that build's behavior. If target launch stalls, point `X64DBG_PATH` at a stock x64dbg build instead.
