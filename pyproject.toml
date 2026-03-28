@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbgmcp"
+version = "0.1.0"
+description = "A local MCP wrapper for x64dbg automation on Windows."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "x64dbg_automate[mcp]==0.7.6",
+]
+
+[project.scripts]
+dbgmcp = "dbgmcp.cli:main"
+dbgmcp-server = "dbgmcp.server:main"
+dbgmcp-install-plugin = "dbgmcp.install_plugin:main"
+dbgmcp-smoke-test = "dbgmcp.smoke_test:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+.vendor/
+.vendor_inspect/
+.tmp-release64/
+.tmp-release64.zip
+smoke_debug*.log
+trace*.log
+*.log

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dbgmcp": {
+      "command": "python",
+      "args": ["-m", "dbgmcp", "mcp"],
+      "env": {
+        "X64DBG_PATH": "C:\\path\\to\\x64dbg.exe"
+      }
+    }
+  }
+}
