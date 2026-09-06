@@ -13,15 +13,8 @@ from typing import Iterable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DESKTOP_ROOT = PROJECT_ROOT.parent
-LOCAL_DBG64_DIR = DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG64"
-LOCAL_DBG32_DIR = DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG32"
 
 KNOWN_DEBUGGER_PATHS = (
-    DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG64" / "醉梦DBG.exe",
-    DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG64" / "x64dbg.exe",
-    DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG64" / "x96dbg.exe",
-    DESKTOP_ROOT / "vtce" / "KittyDebugTool" / "DBG" / "DBG32" / "x32dbg.exe",
     PROJECT_ROOT / "x64dbg.exe",
     PROJECT_ROOT / "x96dbg.exe",
     PROJECT_ROOT / "x32dbg.exe",
@@ -68,13 +61,6 @@ def _iter_debugger_candidates() -> Iterable[tuple[Path, str]]:
     if env_path:
         yield Path(env_path), "env:X64DBG_PATH"
 
-    for candidate_dir in (LOCAL_DBG64_DIR, LOCAL_DBG32_DIR):
-        if candidate_dir.is_dir():
-            for candidate in sorted(candidate_dir.glob("*DBG.exe")):
-                yield candidate, "known-local-glob"
-            for name in ("x64dbg.exe", "x96dbg.exe", "x32dbg.exe"):
-                yield candidate_dir / name, "known-local-path"
-
     for candidate in KNOWN_DEBUGGER_PATHS:
         yield candidate, "known-local-path"
 
@@ -86,9 +72,57 @@ def detect_debugger_path() -> tuple[Path | None, str]:
         if key in seen:
             continue
         seen.add(key)
-        if candidate.is_file():
+        try:
+            exists = candidate.is_file()
+        except OSError:
+            continue
+        if exists:
             return candidate.resolve(), source
     return None, "not-found"
+
+
+def _root_from_candidate(path: Path) -> tuple[str, Path] | None:
+    try:
+        is_file = path.is_file()
+        is_dir = False if is_file else path.is_dir()
+    except OSError:
+        return None
+    if is_file:
+        root = path.parent
+    elif is_dir:
+        root = path
+    else:
+        return None
+    try:
+        root = root.resolve()
+    except OSError:
+        return None
+    return (debugger_arch(path) or "64"), root
+
+
+def discover_debugger_roots() -> list[tuple[str, Path]]:
+    roots: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+
+    def add(path: Path) -> None:
+        found = _root_from_candidate(path)
+        if found is None:
+            return
+        arch, root = found
+        key = str(root).lower()
+        if key in seen:
+            return
+        seen.add(key)
+        roots.append((arch, root))
+
+    env_path = os.environ.get("X64DBG_PATH", "").strip()
+    if env_path:
+        add(Path(env_path))
+
+    for candidate in KNOWN_DEBUGGER_PATHS:
+        add(candidate)
+
+    return roots
 
 
 def plugin_dir_for_debugger(debugger_path: Path | None) -> Path | None:
@@ -327,7 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_parser.add_argument(
         "--x64dbg-path",
         default="",
-        help="Explicit debugger executable path. If omitted, dbgmcp uses X64DBG_PATH or a known local installation.",
+        help="Explicit debugger executable path. If omitted, dbgmcp uses X64DBG_PATH or a standard x64dbg location.",
     )
     mcp_parser.set_defaults(func=command_mcp)
 

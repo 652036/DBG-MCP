@@ -84,6 +84,8 @@ python -m dbgmcp install-plugin
 
 这个命令会下载与你当前 Python 客户端兼容版本匹配的已发布插件，并把 release 文件复制到调试器的 `plugins` 目录中。
 
+安装目标优先使用 `X64DBG_PATH` 指向的调试器目录，否则回退到常见的 x64dbg 安装位置。也可以用 `--dbg64-root` / `--dbg32-root` 显式指定。
+
 ### Smoke test
 
 ```powershell
@@ -111,12 +113,17 @@ $env:DBGMCP_SMOKE_TARGET = 'C:\path\to\target.exe'
 python -m dbgmcp smoke-test --target $env:DBGMCP_SMOKE_TARGET
 ```
 
-## 这台机器上的默认行为
+## 调试器探测
 
-在这台机器上，封装层会优先尝试以下调试器位置：
+封装层会按下面的顺序查找调试器：
 
-- `C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG64\` 目录下的可执行文件
-- 常见的 `x64dbg.exe`、`x32dbg.exe`、`x96dbg.exe` 默认路径
+1. 环境变量 `X64DBG_PATH`
+2. 常见的标准 x64dbg 安装位置，包括：
+
+- 本仓库旁边，或 `release\x64` / `release\x32` 目录下的 `x64dbg.exe`、`x96dbg.exe`、`x32dbg.exe`
+- `%LOCALAPPDATA%\x64dbg\release\x64\x64dbg.exe` 以及对应的 x32 路径
+- `C:\x64dbg\release\x64\x64dbg.exe` 以及其他常见的 `C:\x64dbg` 布局
+- `C:\Program Files\x64dbg\x64dbg.exe` 和 `C:\Program Files (x86)\x64dbg\x32dbg.exe`
 
 如果你的调试器不在这些位置，请手动设置：
 
@@ -141,4 +148,4 @@ $env:X64DBG_PATH = 'C:\path\to\your\debugger.exe'
 
 如果这些条件没有满足，MCP 进程本身仍然可以启动，但像 `start_session`、`connect_to_session` 这类工具就不会真正可用。
 
-在这台工作机上，`DBG64` 目录下的自定义调试器构建可以正常拉起空会话；但是否能稳定加载目标程序，还取决于这个构建本身的行为。如果目标加载卡住，建议把 `X64DBG_PATH` 指向标准版 x64dbg。
+如果自定义调试器构建无法稳定加载目标程序，建议把 `X64DBG_PATH` 指向标准版 x64dbg。
