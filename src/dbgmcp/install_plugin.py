@@ -4,19 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from x64dbg_automate import COMPAT_VERSION
+from dbgmcp.cli import discover_debugger_roots
 
 
 GITHUB_RELEASES_API = "https://api.github.com/repos/dariushoule/x64dbg-automate/releases"
-DEFAULT_DBG64 = Path(r"C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG64")
-DEFAULT_DBG32 = Path(r"C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG32")
 
 
 def _fetch_json(url: str) -> list[dict] | dict:
@@ -31,14 +28,21 @@ def _fetch_json(url: str) -> list[dict] | dict:
         return json.load(response)
 
 
+def _compat_version() -> str:
+    from x64dbg_automate import COMPAT_VERSION
+
+    return COMPAT_VERSION
+
+
 def _pick_release() -> dict:
+    compat_version = _compat_version()
     releases = _fetch_json(GITHUB_RELEASES_API)
     for release in releases:
         tag_name = str(release.get("tag_name", ""))
-        if COMPAT_VERSION in tag_name and not release.get("draft") and not release.get("prerelease"):
+        if compat_version in tag_name and not release.get("draft") and not release.get("prerelease"):
             return release
     raise RuntimeError(
-        f"Could not find a published x64dbg-automate release matching compat version {COMPAT_VERSION!r}."
+        f"Could not find a published x64dbg-automate release matching compat version {compat_version!r}."
     )
 
 
@@ -77,19 +81,50 @@ def _install_zip(zip_path: Path, plugin_dir: Path) -> list[Path]:
     return installed
 
 
-def _default_debugger_roots() -> list[tuple[str, Path]]:
-    roots: list[tuple[str, Path]] = []
-    if DEFAULT_DBG64.is_dir():
-        roots.append(("64", DEFAULT_DBG64))
-    if DEFAULT_DBG32.is_dir():
-        roots.append(("32", DEFAULT_DBG32))
-    return roots
+def resolve_install_targets(
+    dbg64_root: Path | None = None,
+    dbg32_root: Path | None = None,
+    skip_32: bool = False,
+    skip_64: bool = False,
+) -> list[tuple[str, Path]]:
+    targets: list[tuple[str, Path]] = []
+    have_64 = False
+    have_32 = False
+
+    if not skip_64 and dbg64_root is not None:
+        if not dbg64_root.is_dir():
+            raise SystemExit(f"64-bit debugger root not found: {dbg64_root}")
+        targets.append(("64", dbg64_root))
+        have_64 = True
+    if not skip_32 and dbg32_root is not None:
+        if not dbg32_root.is_dir():
+            raise SystemExit(f"32-bit debugger root not found: {dbg32_root}")
+        targets.append(("32", dbg32_root))
+        have_32 = True
+
+    if (not skip_64 and not have_64) or (not skip_32 and not have_32):
+        for arch, root in discover_debugger_roots():
+            if arch == "64" and not skip_64 and not have_64:
+                targets.append((arch, root))
+                have_64 = True
+            elif arch == "32" and not skip_32 and not have_32:
+                targets.append((arch, root))
+                have_32 = True
+            if (skip_64 or have_64) and (skip_32 or have_32):
+                break
+
+    if not targets:
+        raise SystemExit(
+            "No debugger roots found. "
+            "Set X64DBG_PATH to your debugger executable or pass --dbg64-root/--dbg32-root."
+        )
+    return targets
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dbg64-root", type=Path, default=DEFAULT_DBG64)
-    parser.add_argument("--dbg32-root", type=Path, default=DEFAULT_DBG32)
+    parser.add_argument("--dbg64-root", type=Path, default=None)
+    parser.add_argument("--dbg32-root", type=Path, default=None)
     parser.add_argument("--skip-32", action="store_true", help="Only install the 64-bit plugin.")
     parser.add_argument("--skip-64", action="store_true", help="Only install the 32-bit plugin.")
     return parser.parse_args(argv)
@@ -97,18 +132,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    targets: list[tuple[str, Path]] = []
-    if not args.skip_64 and args.dbg64_root.is_dir():
-        targets.append(("64", args.dbg64_root))
-    if not args.skip_32 and args.dbg32_root.is_dir():
-        targets.append(("32", args.dbg32_root))
-    if not targets:
-        discovered = ", ".join(f"{arch}:{path}" for arch, path in _default_debugger_roots())
-        raise SystemExit(
-            "No debugger roots found. "
-            f"Checked default locations: {discovered or 'none found'}. "
-            "Pass --dbg64-root/--dbg32-root explicitly if needed."
-        )
+    targets = resolve_install_targets(
+        dbg64_root=args.dbg64_root,
+        dbg32_root=args.dbg32_root,
+        skip_32=args.skip_32,
+        skip_64=args.skip_64,
+    )
 
     release = _pick_release()
     tag = release["tag_name"]

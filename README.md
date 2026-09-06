@@ -84,6 +84,8 @@ python -m dbgmcp install-plugin
 
 This downloads the published plugin release whose tag matches the installed Python client's compatibility codename and copies the release files into the debugger `plugins` directory.
 
+It installs into the debugger directory from `X64DBG_PATH` when set, otherwise a standard x64dbg location. Override the destination with `--dbg64-root` / `--dbg32-root`.
+
 ### Smoke test
 
 ```powershell
@@ -111,12 +113,17 @@ $env:DBGMCP_SMOKE_TARGET = 'C:\path\to\target.exe'
 python -m dbgmcp smoke-test --target $env:DBGMCP_SMOKE_TARGET
 ```
 
-## Workstation defaults
+## Debugger discovery
 
-On this machine, the wrapper tries the following common debugger paths first:
+The wrapper looks for a debugger in this order:
 
-- executables under `C:\Users\Administrator\Desktop\vtce\KittyDebugTool\DBG\DBG64\`
-- standard `x64dbg.exe`, `x32dbg.exe`, and `x96dbg.exe` paths
+1. The `X64DBG_PATH` environment variable
+2. Standard stock x64dbg locations, including:
+
+- `x64dbg.exe`, `x96dbg.exe`, and `x32dbg.exe` next to this repository or under `release\x64` / `release\x32`
+- `%LOCALAPPDATA%\x64dbg\release\x64\x64dbg.exe` and the matching x32 path
+- `C:\x64dbg\release\x64\x64dbg.exe` and other common `C:\x64dbg` layouts
+- `C:\Program Files\x64dbg\x64dbg.exe` and `C:\Program Files (x86)\x64dbg\x32dbg.exe`
 
 If your debugger executable is elsewhere, set:
 
@@ -141,4 +148,4 @@ This wrapper cannot auto-complete these external steps on its own:
 
 Without those, the MCP process can start, but tools like `start_session` or `connect_to_session` will not become useful.
 
-On this workstation, empty sessions work with the bundled custom debugger build under `DBG64`, but loading a target executable may depend on that build's behavior. If target launch stalls, point `X64DBG_PATH` at a stock x64dbg build instead.
+If a custom debugger build fails to load a target, point `X64DBG_PATH` at a stock x64dbg build instead.
