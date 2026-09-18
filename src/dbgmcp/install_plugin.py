@@ -63,22 +63,44 @@ def _download_asset(asset: dict, destination: Path) -> None:
 
 
 def _install_zip(zip_path: Path, plugin_dir: Path) -> list[Path]:
-    plugin_dir.mkdir(parents=True, exist_ok=True)
-    installed: list[Path] = []
+    # Prepare every member before touching an installed file. ZIP CRC/read
+    # failures and staging write errors must leave the old installation intact.
     with zipfile.ZipFile(zip_path) as archive:
+        members: list[tuple[zipfile.ZipInfo, str]] = []
+        names: set[str] = set()
         for member in archive.infolist():
             if member.is_dir():
                 continue
             member_path = Path(member.filename)
             if member_path.parts[:1] != ("Release",):
                 continue
-            output_path = plugin_dir / member_path.name
-            with archive.open(member) as src, output_path.open("wb") as dst:
-                shutil.copyfileobj(src, dst)
-            installed.append(output_path)
-    if not installed:
-        raise RuntimeError(f"No Release/* files found in {zip_path.name}.")
-    return installed
+            name = member_path.name
+            # Extraction intentionally flattens Release/* into plugins. Check
+            # case-insensitively because the debugger runs on Windows.
+            key = name.casefold()
+            if key in names:
+                raise RuntimeError(f"Duplicate plugin filename in archive: {name}")
+            names.add(key)
+            members.append((member, name))
+        if not members:
+            raise RuntimeError(f"No Release/* files found in {zip_path.name}.")
+
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".dbgmcp-stage-", dir=plugin_dir) as temp_dir:
+            staging = Path(temp_dir)
+            for member, name in members:
+                with archive.open(member) as src, (staging / name).open("xb") as dst:
+                    shutil.copyfileobj(src, dst)
+
+            installed: list[Path] = []
+            for _, name in members:
+                output_path = plugin_dir / name
+                # Same-filesystem replacement never truncates a target while
+                # decompressing. A locked target can still fail at this stage;
+                # this is not an all-files transaction or concurrent installer.
+                (staging / name).replace(output_path)
+                installed.append(output_path)
+            return installed
 
 
 def resolve_install_targets(
